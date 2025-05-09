@@ -217,7 +217,8 @@ int main()
         float sign = 1.0;
         for (int i = 0; i < BANDWIDTH; ++i)
         {
-            float mag = FFT_SCALE * hypotf(freq_bins[i].r, freq_bins[i].i);
+            kiss_fft_cpx bin = freq_bins[i + BEGIN_BIN];
+            float mag = FFT_SCALE * hypotf(bin.r, bin.i);
             float tau = state.smoothing_factor;
 
             smoothed_fft[i] = tau * smoothed_fft[i] + (1.0 - tau) * mag;
