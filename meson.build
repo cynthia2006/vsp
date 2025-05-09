@@ -1,8 +1,17 @@
-project('vsp', 'c')
+project('vsp', 'c', version : '1.0')
 
-deps = [dependency('kissfft-float'),
+cmake = import('cmake')
+cmake_opts = cmake.subproject_options()
+cmake_opts.add_cmake_defines({
+    'KISSFFT_STATIC': true,
+    'KISSFFT_TEST': false,
+    'KISSFFT_TOOLS': false
+})
+kissfft = cmake.subproject('kissfft', options : cmake_opts)
+
+deps = [kissfft.dependency('kissfft'),
         dependency('glfw3'),
-        dependency('libpipewire-0.3')]
+        dependency('libpipewire-0.3'),]
 
 cc = meson.get_compiler('c')
 deps += [cc.find_library('m', required : false)]

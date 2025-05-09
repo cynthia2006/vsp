@@ -11,12 +11,9 @@ vsp is a lightweight OpenGL audio visualizer. A port of [rvsp](https://github.co
 - PipeWire
 
 ```
-$ git clone https://github.com/cynthia2006/vsp
+$ git clone --recurse-submodules https://github.com/cynthia2006/vsp
 $ cd vsp
-$ mkdir build-tmp
-$ git clone https://github.com/mborgerding/kissfft
-$ make PREFIX=../build-tmp KISSFFT_STATIC=1 KISSFFT_TOOLS=0 install
-$ PKG_CONFIG_PATH=build-tmp/lib/pkgconfig meson setup builddir --buildtype=release
+$ meson setup builddir --buildtype=release
 $ meson compile -C builddir
 ```
 
