@@ -1,4 +1,6 @@
-#include "glad/gl.h"
+#include <stdbool.h>
+
+#include "gl.h"
 
 struct vertex
 {
@@ -13,7 +15,7 @@ struct polygon_renderer
     GLfloat line_width;
 };
 
-void
+bool
 pr_init (struct polygon_renderer* pr, GLfloat line_width);
 
 void

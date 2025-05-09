@@ -4,18 +4,17 @@
 #include <pipewire/pipewire.h>
 #include <stdint.h>
 
-struct sample_ring_buffer
+struct pwb_sample_buffer
 {
     float* buffer;
     size_t capacity;
     size_t cursor;
-    size_t done;
 };
 
-struct state_carrier
+struct pwb_state_carrier
 {
     struct pw_stream* stream;
-    struct sample_ring_buffer ring_buffer;
+    struct pwb_sample_buffer ring_buffer;
 
     uint32_t sample_rate;
 };
@@ -23,7 +22,7 @@ struct state_carrier
 struct pipewire_backend
 {
     struct pw_stream_events stream_events;
-    struct state_carrier state;
+    struct pwb_state_carrier state;
 };
 
 void

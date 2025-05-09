@@ -1,8 +1,24 @@
-#include <stdint.h>
+/**
+ *   Copyright (C) 2025 Cynthia
+ *
+ *   This program is free software: you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation, either version 3 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
-#include <stddef.h>
 
 #include <spa/pod/builder.h>
 #include <spa/param/audio/format-utils.h>
@@ -10,7 +26,7 @@
 #include "pw.h"
 
 static bool
-sample_ring_buffer_init (struct sample_ring_buffer* rb,
+sample_ring_buffer_init (struct pwb_sample_buffer* rb,
                          size_t capacity)
 {
     rb->capacity = capacity;
@@ -25,15 +41,15 @@ sample_ring_buffer_init (struct sample_ring_buffer* rb,
 }
 
 // Put doesn't care if the data was actually read, thus allowing overwrites.
-static void
-sample_ring_buffer_put (struct sample_ring_buffer* rb, float sample)
+static void inline
+sample_ring_buffer_put (struct pwb_sample_buffer* rb, float sample)
 {
     rb->buffer[rb->cursor] = sample;
     rb->cursor = (rb->cursor + 1) % rb->capacity;
 }
 
 static void
-sample_ring_buffer_drop (struct sample_ring_buffer* rb)
+sample_ring_buffer_drop (struct pwb_sample_buffer* rb)
 {
     free(rb->buffer);
 
@@ -45,8 +61,8 @@ sample_ring_buffer_drop (struct sample_ring_buffer* rb)
 static void
 fill_audio_buffer(void *_userdata)
 {
-    struct state_carrier *state = _userdata;
-    struct sample_ring_buffer *rb = &state->ring_buffer;
+    struct pwb_state_carrier *state = _userdata;
+    struct pwb_sample_buffer *rb = &state->ring_buffer;
     struct pw_buffer *b = pw_stream_dequeue_buffer(state->stream);
 
     float *samples = b->buffer->datas[0].data;
@@ -122,7 +138,7 @@ void
 pipewire_backend_capture(struct pipewire_backend *backend,
                          float *sample_buf)
 {
-    struct sample_ring_buffer *rb = &backend->state.ring_buffer;
+    struct pwb_sample_buffer *rb = &backend->state.ring_buffer;
     size_t index = rb->cursor;
 
     for (size_t i = 0; i < rb->capacity; ++i)
