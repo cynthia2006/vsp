@@ -56,9 +56,9 @@ To understand the theory that underpins the mechanics of this program, i.e. **ST
 
 ## Why Rust to C?
 
-As it is coded in C—an allegedly *"unsafe"* language—it is expected to be faster but more error-prone. But from personal experience, I can tell—it is the converse; because in Rust, one takes safety for granted, and when unsafe code hidden away by *"safe code"* malfunctions, it becomes a painstaking quest to identify the site of error and fix it.
+As it is coded in C—an allegedly C is allegedly an unsafe language, but during the development of rvsp I had this epiphany, that Rust users often take safety for granted. When a safe interface wrapping an unsafe interface malfunctions, it becomes a painstaking job of identifying and fixing the error.
 
-Rust, as a modern language is complicated, and that too for a good reason; because *"primitive"* languages like C seem easy at the surface, but are actually hard to get right, especially when complicated things have to be built upon those primitive things. However, when it is about being certain of the exact behavior of a program, languages like Rust, that hide a lot of implementation detail beneath abstract *"zero-cost"* interfaces, make that process harder.
+As a modern language Rust is complicated, but for a good reason; because the simplicity of primitive C is deceiving, and careless handling often results in undiagnosed memory safety errors, especially when dealing with complex code architectures. However, the degree of control over resources that C provides is far greater than Rust; quite often one finds themselves memorizing additional behavior rules imposed by safe zero-cost abstractions in order to ensure they’re followed when dealing with unsafe interfaces.
 
 **TL;DR** The sheer complexity of the code made me frightened, that I won't able to comprehend any of it in future. Also, the compilation is too slow!
 
