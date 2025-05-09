@@ -1,7 +1,6 @@
 project('vsp', 'c')
 
 deps = [dependency('kissfft-float'),
-        dependency('sdl3'),
         dependency('glfw3'),
         dependency('libpipewire-0.3')]
 
