@@ -52,6 +52,7 @@ struct vsp_state
     float smoothing_factor;
     float gain;
     float gain_multiplier;
+    float line_width;
 };
 
 static void
@@ -126,6 +127,9 @@ static void
 glfw_resize_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
+
+    struct vsp_state *state = glfwGetWindowUserPointer(window);
+    state->line_width = INIT_LINE_WIDTH / INIT_WIDTH * width;
 }
 
 int main()
@@ -147,7 +151,8 @@ int main()
     struct vsp_state state = {
         .gain = INIT_GAIN,
         .gain_multiplier = db_rms_to_power(INIT_GAIN),
-        .smoothing_factor = INIT_SMOOTHING_FACTOR
+        .smoothing_factor = INIT_SMOOTHING_FACTOR,
+        .line_width = INIT_LINE_WIDTH
     };
 
     glfwInit();
@@ -228,6 +233,9 @@ int main()
 
             sign *= -1.0;
         }
+
+        // Update line width, to ensure it is uniform.
+        pr.line_width = state.line_width;
 
         pr_draw(&pr, points, NUM_POINTS);
         glfwSwapBuffers(window);
