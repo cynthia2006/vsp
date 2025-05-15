@@ -169,12 +169,12 @@ int main()
     pw_thread_loop_start(loop);
 
 
-    pipewire_backend_init(&pwb,
+    assert(pipewire_backend_init(&pwb,
                           pw_thread_loop_get_loop(loop),
                           "vsp",
                           WINDOW_SIZE,
                           HOP_SIZE,
-                          SAMPLERATE);
+                          SAMPLERATE) == 1);
 
     gen_hann_window(WINDOW_SIZE, hann_win);
     fft = kiss_fftr_alloc(WINDOW_SIZE, 0, NULL, NULL);
@@ -185,13 +185,14 @@ int main()
 
     glfwSetWindowUserPointer(window, &state);
     glfw_update_window_title(window, &state);
+
     glfwSetKeyCallback(window, glfw_key_callback);
     glfwSetFramebufferSizeCallback(window, glfw_resize_callback);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
     gladLoadGL(glfwGetProcAddress);
 
-    const float X_STEP = (2.0 - 2.0 * MARGIN_VW) / NUM_POINTS;
+    const float X_STEP = (2.0 - 2.0 * MARGIN_VW) / BANDWIDTH;
     float x = -1.0 + MARGIN_VW;
 
     for (int i = 0; i < NUM_POINTS; ++i) {
@@ -234,18 +235,18 @@ int main()
             sign *= -1.0;
         }
 
-        // Update line width, to ensure it is uniform.
-        pr.line_width = state.line_width;
-
+        // Update line width to ensure it is uniform.
+        pr_set_line_width(&pr, state.line_width);
         pr_draw(&pr, points, NUM_POINTS);
         glfwSwapBuffers(window);
     }
 
     pw_thread_loop_stop(loop);
 
-    error:
+error:
     if (window)
         glfwDestroyWindow(window);
+
 
     pr_deinit(&pr);
     pipewire_backend_deinit(&pwb);

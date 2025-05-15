@@ -25,38 +25,8 @@
 
 #include "pw.h"
 
-static bool
-sample_ring_buffer_init (struct pwb_sample_buffer* rb,
-                         size_t capacity)
-{
-    rb->capacity = capacity;
-    rb->buffer = calloc (rb->capacity, sizeof(float));
-    if (rb->buffer == NULL)
-    {
-        return false;
-    }
-    rb->cursor = 0;
-
-    return true;
-}
-
-// Put doesn't care if the data was actually read, thus allowing overwrites.
-static void inline
-sample_ring_buffer_put (struct pwb_sample_buffer* rb, float sample)
-{
-    rb->buffer[rb->cursor] = sample;
-    rb->cursor = (rb->cursor + 1) % rb->capacity;
-}
-
 static void
-sample_ring_buffer_drop (struct pwb_sample_buffer* rb)
-{
-    free(rb->buffer);
-
-    rb->buffer = NULL;
-    rb->capacity = 0;
-    rb->cursor = 0;
-}
+pipewire_backend_store (struct pwb_sample_buffer* rb, float* samples, size_t len);
 
 static void
 fill_audio_buffer(void *_userdata)
@@ -68,14 +38,12 @@ fill_audio_buffer(void *_userdata)
     float *samples = b->buffer->datas[0].data;
     uint32_t n_samples = b->buffer->datas[0].chunk->size / sizeof(float);
 
-    for (uint32_t i = 0; i < n_samples; ++i)
-        sample_ring_buffer_put(rb, samples[i]);
-
+    pipewire_backend_store(rb, samples, n_samples);
     pw_stream_queue_buffer(state->stream, b);
 }
 
 
-void
+bool
 pipewire_backend_init (struct pipewire_backend *backend,
                        struct pw_loop* loop,
                        const char* stream_name,
@@ -101,15 +69,34 @@ pipewire_backend_init (struct pipewire_backend *backend,
                               PW_KEY_STREAM_CAPTURE_SINK, "true",
                               NULL);
 
-    sample_ring_buffer_init(&backend->state.ring_buffer, window_size);
+    backend->state.ring_buffer.capacity = window_size;
+    backend->state.ring_buffer.cursor = 0;
+
+    backend->state.ring_buffer.buffer = calloc (window_size, sizeof(float));
+    if (!backend->state.ring_buffer.buffer)
+        goto cleanup;
+
     backend->state.sample_rate = sample_rate;
-    backend->state.stream = pw_stream_new_simple(loop,
+    backend->state.stream = pw_stream_new_simple (loop,
                                                  stream_name,
                                                  props,
                                                  &backend->stream_events,
                                                  &backend->state);
+    if (!backend->state.stream)
+        goto cleanup;
+
+    return true;
+cleanup:
+    if (backend->state.stream)
+        pw_stream_destroy(backend->state.stream);
+
+    if (props)
+        pw_properties_free (props);
+
+    return false;
 }
 
+// 0 for success; <0 for failure.
 int
 pipewire_backend_connect (struct pipewire_backend *backend)
 {
@@ -135,8 +122,7 @@ pipewire_backend_connect (struct pipewire_backend *backend)
 }
 
 void
-pipewire_backend_capture(struct pipewire_backend *backend,
-                         float *sample_buf)
+pipewire_backend_capture(struct pipewire_backend *backend, float *sample_buf)
 {
     struct pwb_sample_buffer *rb = &backend->state.ring_buffer;
     size_t index = rb->cursor;
@@ -148,9 +134,20 @@ pipewire_backend_capture(struct pipewire_backend *backend,
     }
 }
 
+// Put doesn't care if the data was actually read, thus allowing overwrites.
+static void
+pipewire_backend_store (struct pwb_sample_buffer* rb, float* samples, size_t len)
+{
+    for(size_t i = 0; i < len; ++i)
+    {
+        rb->buffer[rb->cursor] = samples[i];
+        rb->cursor = (rb->cursor + 1) % rb->capacity;
+    }
+}
+
 void
 pipewire_backend_deinit (struct pipewire_backend *backend)
 {
     pw_stream_destroy (backend->state.stream);
-    sample_ring_buffer_drop(&backend->state.ring_buffer);
+    free(backend->state.ring_buffer.buffer);
 }

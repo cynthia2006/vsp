@@ -38,6 +38,9 @@ void
 pr_clear (struct polygon_renderer* pr);
 
 void
+pr_set_line_width (struct polygon_renderer* pr, float line_width);
+
+void
 pr_draw (struct polygon_renderer* pr, struct vertex* points, GLsizei num);
 
 void

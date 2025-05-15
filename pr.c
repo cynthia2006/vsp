@@ -67,7 +67,7 @@ pr_init (struct polygon_renderer* pr, GLfloat line_width)
 }
 
 void
-pr_clear(struct polygon_renderer* pr)
+pr_clear (struct polygon_renderer* pr)
 {
     (void)pr; // Currently, not used.
 
@@ -76,7 +76,7 @@ pr_clear(struct polygon_renderer* pr)
 }
 
 void
-pr_draw(struct polygon_renderer* pr, struct vertex* points, GLsizei num)
+pr_draw (struct polygon_renderer* pr, struct vertex* points, GLsizei num)
 {
     glUseProgram(pr->program);
     glBindVertexArray(pr->vao);
@@ -89,7 +89,13 @@ pr_draw(struct polygon_renderer* pr, struct vertex* points, GLsizei num)
 }
 
 void
-pr_deinit(struct polygon_renderer* pr)
+pr_set_line_width (struct polygon_renderer* pr, float line_width)
+{
+    pr->line_width = line_width;
+}
+
+void
+pr_deinit (struct polygon_renderer* pr)
 {
     glDeleteVertexArrays(1, &pr->vao);
     glDeleteBuffers(1, &pr->vbo);
