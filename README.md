@@ -7,6 +7,7 @@ vsp is a lightweight OpenGL audio visualizer. A port of [rvsp](https://github.co
 ### Prerequisites
 
 - Meson (build system)
+- CMake (for Meson, more specifically for KissFFT)
 - GLFW 3.0
 - PipeWire
 
