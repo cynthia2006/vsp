@@ -23,7 +23,7 @@
 #include <spa/pod/builder.h>
 #include <spa/param/audio/format-utils.h>
 
-#include "pw.h"
+#include "pipewire.h"
 
 static void
 pipewire_backend_store (struct pwb_sample_buffer* rb, float* samples, size_t len);
@@ -66,6 +66,7 @@ pipewire_backend_init (struct pipewire_backend *backend,
                               PW_KEY_MEDIA_CATEGORY, "Monitor",
                               PW_KEY_MEDIA_ROLE, "DSP",
                               PW_KEY_NODE_LATENCY, tmp,
+                              PW_KEY_NODE_MAX_LATENCY, tmp,
                               PW_KEY_STREAM_CAPTURE_SINK, "true",
                               NULL);
 

@@ -19,33 +19,69 @@
 #include <math.h>
 #include <assert.h>
 
-#include "pr.h"
+#include "renderer.h"
 
 #include <GLFW/glfw3.h>
 #include <pipewire/pipewire.h>
 #include <kiss_fftr.h>
 
-#include "pw.h"
+#include "pipewire.h"
 
-const int WINDOW_SIZE = 2048;
-const float INIT_SMOOTHING_FACTOR = 0.7;
-const float INIT_GAIN = 23.0;
-const int HOP_SIZE = WINDOW_SIZE / 2;
-const int FFT_SIZE = WINDOW_SIZE / 2 + 1;
-const float FFT_SCALE = 1.0 / WINDOW_SIZE;
-const int SAMPLERATE = 48000;
-const float BIN_WIDTH = (float)WINDOW_SIZE / SAMPLERATE;
-const float MIN_FREQ = 50.0;
-const float MAX_FREQ = 10000.0;
-const int BEGIN_BIN = BIN_WIDTH * MIN_FREQ;
-const int END_BIN = BIN_WIDTH * MAX_FREQ;
-const int BANDWIDTH = END_BIN - BEGIN_BIN;
+/**
+ * The following a set of options that can be tweaked in order to change
+ * the behaviour of this program.
+ *
+ * And, you thought there was a config file?! Fool! Real people write
+ * configuration right in their code!
+ */
 
+// Initial width of the visualizer window.
 const int INIT_WIDTH = 1280;
+// Initial height of the visualizer window.
 const int INIT_HEIGHT = 720;
-const float INIT_LINE_WIDTH = 1.5;
-const float MARGIN_VW = 0.01;
+// Number of bins; controls the granularity of the spectrum.
+//
+// NOTE The frequency spectrum is in Mel units roughly from 31 to 3178,
+// correspoding to exactly to range of 20 to 20000 Hz.
+const int NUM_POINTS = 360;
+// Number of MSAA samples; controls the strength of anti-aliasing.
 const int MSAA_HINT = 8;
+// Margin around the ends of the visualizer polygon (in viewport units).
+const float MARGIN_VW = 0.01;
+// Line-width to pass to OpenGL for drawing the polygon.
+//
+// NOTE This would scale automatically on window resize; see resize_callback()
+// TODO Make line-width variable.
+const float INIT_LINE_WIDTH = 1.75;
+// Initial amplitude gain (in decibels).
+//
+// NOTE Output of FFT is amplified, because the values are small in magnitude.
+// For that reason, conventionally a log-scale is used, but it produces an unpleasant
+// visualization, so we use a linear scale instead.
+const float INIT_GAIN = 20.0;
+// Initial exponential smoothing factor (ranging from 0 to 1); controls the strength of
+// the (RC) low-pass filter applied to the spectrum. This is done in addition to 50%
+// overlap (optimial for Hann window) to ensure a smooth visualizer experience.
+//
+// Higher values reduce reactivity to transients, lower values do the opposite.
+// WARNING Setting this below zero or above one is undefined behaviour.
+const float INIT_SMOOTHING_FACTOR = 0.8;
+
+/**
+ * WARNING Don't change the following options, UNLESS YOU KNOW WHAT YOU ARE DOING.
+ */
+
+// Size of audio-ring buffer; controls the FFT analysis length.
+const int WINDOW_SIZE = 4096;
+// Sampling rate to capture audio at.
+//
+// NOTE This is often the sample rate on consumer PCs, however on mismatch libpipewire
+// would resample it up/down to match this sample rate.
+const int SAMPLERATE = 48000;
+// Lower limit of human perception.
+const float MIN_FREQ = 20.0;
+// Higher limit of human perception.
+const float MAX_FREQ = 20000.0;
 
 struct vsp_state
 {
@@ -69,7 +105,7 @@ float db_rms_to_power(float db)
 }
 
 static void
-glfw_update_window_title (GLFWwindow *window, struct vsp_state *state)
+update_window_title (GLFWwindow *window, struct vsp_state *state)
 {
     char title[32];
     snprintf(title, sizeof title,
@@ -81,13 +117,13 @@ glfw_update_window_title (GLFWwindow *window, struct vsp_state *state)
 }
 
 static void
-glfw_error_callback (int error, const char* description)
+error_callback (int error, const char* description)
 {
     fprintf(stderr, "GLFW error: %s\n", description);
 }
 
 static void
-glfw_key_callback (GLFWwindow* window, int key, int scancode, int action, int mods)
+key_callback (GLFWwindow* window, int key, int scancode, int action, int mods)
 {
     struct vsp_state *state = glfwGetWindowUserPointer(window);
 
@@ -100,31 +136,31 @@ glfw_key_callback (GLFWwindow* window, int key, int scancode, int action, int mo
         if (state->smoothing_factor < 0)
             state->smoothing_factor = 0;
 
-        glfw_update_window_title(window, state);
+        update_window_title(window, state);
     } else if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS)
     {
         state->smoothing_factor += 0.01;
         if (state->smoothing_factor > 1)
             state->smoothing_factor = 1;
 
-        glfw_update_window_title(window, state);
+        update_window_title(window, state);
     } else if (key == GLFW_KEY_UP && (action == GLFW_PRESS || action == GLFW_REPEAT))
     {
         state->gain += 0.1;
         state->gain_multiplier = db_rms_to_power(state->gain);
 
-        glfw_update_window_title(window, state);
+        update_window_title(window, state);
     } else if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT))
     {
         state->gain -= 0.1;
         state->gain_multiplier = db_rms_to_power(state->gain);
 
-        glfw_update_window_title(window, state);
+        update_window_title(window, state);
     }
 }
 
 static void
-glfw_resize_callback(GLFWwindow* window, int width, int height)
+resize_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
 
@@ -134,6 +170,12 @@ glfw_resize_callback(GLFWwindow* window, int width, int height)
 
 int main()
 {
+    const int FFT_SIZE = WINDOW_SIZE / 2 + 1;
+
+    const float BIN_WIDTH = (float)WINDOW_SIZE / SAMPLERATE;
+    const int BEGIN_BIN = BIN_WIDTH * MIN_FREQ;
+    const int BANDWIDTH = BIN_WIDTH * MAX_FREQ - BEGIN_BIN;
+
     GLFWwindow *window;
     struct polygon_renderer pr;
     struct pipewire_backend pwb;
@@ -145,7 +187,6 @@ int main()
     kiss_fft_cpx freq_bins[FFT_SIZE];
     float smoothed_fft[BANDWIDTH];
 
-    const int NUM_POINTS = BANDWIDTH + 1;
     struct vertex points[NUM_POINTS];
 
     struct vsp_state state = {
@@ -158,7 +199,7 @@ int main()
     glfwInit();
     pw_init(NULL, NULL);
 
-    glfwSetErrorCallback(glfw_error_callback);
+    glfwSetErrorCallback(error_callback);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -168,12 +209,11 @@ int main()
     pw_thread_loop_lock(loop);
     pw_thread_loop_start(loop);
 
-
     assert(pipewire_backend_init(&pwb,
                           pw_thread_loop_get_loop(loop),
                           "vsp",
                           WINDOW_SIZE,
-                          HOP_SIZE,
+                          WINDOW_SIZE / 2,
                           SAMPLERATE) == 1);
 
     gen_hann_window(WINDOW_SIZE, hann_win);
@@ -184,15 +224,15 @@ int main()
         goto error;
 
     glfwSetWindowUserPointer(window, &state);
-    glfw_update_window_title(window, &state);
+    update_window_title(window, &state);
 
-    glfwSetKeyCallback(window, glfw_key_callback);
-    glfwSetFramebufferSizeCallback(window, glfw_resize_callback);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetFramebufferSizeCallback(window, resize_callback);
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
     gladLoadGL(glfwGetProcAddress);
 
-    const float X_STEP = (2.0 - 2.0 * MARGIN_VW) / BANDWIDTH;
+    static const float X_STEP = 2.0 * (1.0 - MARGIN_VW) / NUM_POINTS;
     float x = -1.0 + MARGIN_VW;
 
     for (int i = 0; i < NUM_POINTS; ++i) {
@@ -218,24 +258,43 @@ int main()
 
         kiss_fftr(fft, sample_win, freq_bins);
 
-        pr_clear(&pr);
-
-        float sign = 1.0;
         for (int i = 0; i < BANDWIDTH; ++i)
         {
             kiss_fft_cpx bin = freq_bins[i + BEGIN_BIN];
-            float mag = FFT_SCALE * hypotf(bin.r, bin.i);
-            float tau = state.smoothing_factor;
 
+            static const float FFT_SCALE = 1.0 / WINDOW_SIZE;
+
+            const float mag = FFT_SCALE * hypotf(bin.r, bin.i);
+            const float tau = state.smoothing_factor;
+
+            // Exponential smoothing for smoother animations.
             smoothed_fft[i] = tau * smoothed_fft[i] + (1.0 - tau) * mag;
+        }
 
-            float y = smoothed_fft[i] * state.gain_multiplier * sign;
+        float sign = 1.0;
+        for (int i = 0; i < NUM_POINTS; ++i) {
+            static const float DELTA_MEL = 1127.0 * logf((20000.0 + 700.0) / (20.0 + 700.0));
+            static const float MEL_MIN = 1127.0 * logf(1.0 + 20.0/700.0);
+
+            const float mel = DELTA_MEL * (float)i / NUM_POINTS + MEL_MIN;
+            const float f = 700.0 * (expf(mel / 1127.0) - 1.0);
+
+            float bin_index;
+            const float bin_alpha = modff(f * BIN_WIDTH, &bin_index);
+            const float bin = smoothed_fft[(int)bin_index];
+
+            // NOTE Assuming it is in bounds; didn't verify ;(
+            const float next_bin = smoothed_fft[(int)bin_index + 1];
+
+            // Linear interpolation. Why? Because we're working with lines!
+            const float lerp = (1.0 - bin_alpha) * bin + bin_alpha * next_bin;
+            const float y = lerp * state.gain_multiplier * sign;
+
             points[i + 1].y = y;
-
             sign *= -1.0;
         }
 
-        // Update line width to ensure it is uniform.
+        // Update line width to ensure it is uniform across all viewports.
         pr_set_line_width(&pr, state.line_width);
         pr_draw(&pr, points, NUM_POINTS);
         glfwSwapBuffers(window);

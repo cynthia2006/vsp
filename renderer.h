@@ -35,9 +35,6 @@ bool
 pr_init (struct polygon_renderer* pr, GLfloat line_width);
 
 void
-pr_clear (struct polygon_renderer* pr);
-
-void
 pr_set_line_width (struct polygon_renderer* pr, float line_width);
 
 void

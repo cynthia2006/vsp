@@ -16,7 +16,7 @@
  */
 #include <stddef.h>
 
-#include "pr.h"
+#include "renderer.h"
 
 bool
 pr_init (struct polygon_renderer* pr, GLfloat line_width)
@@ -66,7 +66,7 @@ pr_init (struct polygon_renderer* pr, GLfloat line_width)
     return true;
 }
 
-void
+static inline void
 pr_clear (struct polygon_renderer* pr)
 {
     (void)pr; // Currently, not used.
@@ -85,6 +85,7 @@ pr_draw (struct polygon_renderer* pr, struct vertex* points, GLsizei num)
                  points,
                  GL_STREAM_DRAW);
     glLineWidth(pr->line_width);
+    pr_clear(pr);
     glDrawArrays(GL_LINE_STRIP, 0, num);
 }
 
