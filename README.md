@@ -2,6 +2,10 @@
 
 vsp is a lightweight OpenGL audio visualizer. A port of [rvsp](https://github.com/cynthia2006/rvsp), the functionality is an exact replica of the original, save for a few things. 
 
+[CinematicVSP.webm](https://github.com/user-attachments/assets/c3e6a155-3f7c-4178-bced-53face6879ce)
+
+<div align="center">(Music: <i>Meltt — Within You, Within Me</i>)</div> 
+
 ## Installation
 
 ### Prerequisites
