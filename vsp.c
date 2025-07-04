@@ -104,6 +104,12 @@ float db_rms_to_power(float db)
     return powf(10, M_SQRT2 * db / 20);
 }
 
+static inline
+float mel_to_freq(float mel)
+{
+    return 700.0 * (expf(mel / 1127.0) - 1.0);
+}
+
 static void
 update_window_title (GLFWwindow *window, struct vsp_state *state)
 {
@@ -272,23 +278,24 @@ int main()
         }
 
         float sign = 1.0;
+        const float gain = state.gain_multiplier;
+
         for (int i = 0; i < NUM_POINTS; ++i) {
             static const float DELTA_MEL = 1127.0 * logf((20000.0 + 700.0) / (20.0 + 700.0));
             static const float MEL_MIN = 1127.0 * logf(1.0 + 20.0/700.0);
 
             const float mel = DELTA_MEL * (float)i / NUM_POINTS + MEL_MIN;
-            const float f = 700.0 * (expf(mel / 1127.0) - 1.0);
+            const float freq = mel_to_freq(mel);
 
             float bin_index;
-            const float bin_alpha = modff(f * BIN_WIDTH, &bin_index);
+            const float bin_alpha = modff(freq * BIN_WIDTH, &bin_index);
             const float bin = smoothed_fft[(int)bin_index];
+            const int next_bin_index = bin_index + 1; // Addition, then cast to int.
+            const float next_bin = next_bin_index > BANDWIDTH ? 0 : smoothed_fft[next_bin_index];
 
-            // NOTE Assuming it is in bounds; didn't verify ;(
-            const float next_bin = smoothed_fft[(int)bin_index + 1];
-
-            // Linear interpolation. Why? Because we're working with lines!
+            // Linear interpolation; why? Because we're working with lines!
             const float lerp = (1.0 - bin_alpha) * bin + bin_alpha * next_bin;
-            const float y = lerp * state.gain_multiplier * sign;
+            const float y = lerp * gain * sign;
 
             points[i + 1].y = y;
             sign *= -1.0;
