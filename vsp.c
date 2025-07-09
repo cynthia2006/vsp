@@ -119,6 +119,15 @@ float mel_to_freq(float mel)
 //             + p[7] * ((x-p[0])*(x-p[2])*(x-p[4])) / ((p[6]-p[0])*(p[6]-p[2])*(p[6]-p[4]));
 // }
 
+static float lerp(const float x,
+                  const float x0, const float y0,
+                  const float x1, const float y1)
+{
+    const float x_delta = x0 - x1;
+
+    return (y0 * (x - x1) - y1 * (x - x0)) / x_delta;
+}
+
 static void
 update_window_title (GLFWwindow *window, struct vsp_state *state)
 {
@@ -290,29 +299,22 @@ int main()
         const float gain = state.gain_multiplier;
 
         for (int i = 0; i < NUM_POINTS; ++i) {
-            static const float DELTA_MEL = 1127.0 * logf((20000.0 + 700.0) / (20.0 + 700.0)),
-                               MEL_MIN = 1127.0 * logf(1.0 + 20.0/700.0);
+            static const float DELTA_MEL = 1127.0 * logf((20000.0 + 700.0) / (20.0 + 700.0));
+            static const float MEL_MIN = 1127.0 * logf(1.0 + 20.0/700.0);
 
             #define index_to_mel(i) (DELTA_MEL * (float)(i) / NUM_POINTS + MEL_MIN)
 
-            const float fc = mel_to_freq(index_to_mel(i)),
-                        fnext = mel_to_freq(index_to_mel(i + 1));
+            const float fc = mel_to_freq(index_to_mel(i));
+            const long lo_bin = fc * BIN_WIDTH,
+                       hi_bin = ceilf(mel_to_freq(index_to_mel(i + 1)) * BIN_WIDTH);
 
-            // In the Mel-scale higher frequencies are more condensed; i.e. same increments
-            // in the Mel-scale translate to small increments for lower frequencies, and
-            // large increments for higher frequencies in the linear-scale.
-            //
-            // If we resort to normal indexing, would it crudely skip wide bands of frequencies.
-            // So instead, a more diplomatic approach is to take the average of bands.
-            const int lo_bin = fc * BIN_WIDTH,
-                      hi_bin = ceilf(fnext * BIN_WIDTH);
+            float y = lerp(
+                fc,
+                (float)lo_bin / BIN_WIDTH, smoothed_fft[lo_bin],
+                (float)hi_bin / BIN_WIDTH, hi_bin > BANDWIDTH ? 0 : smoothed_fft[hi_bin]
+            );
 
-            float band_avg = 0.0;
-            for (int i = lo_bin; i < hi_bin; ++i)
-                band_avg += smoothed_fft[i];
-            band_avg /= hi_bin - lo_bin;
-
-            points[i + 1].y = gain * sign * band_avg;
+            points[i + 1].y = gain * sign * y;
             sign *= -1.0;
         }
 
