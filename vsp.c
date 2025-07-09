@@ -110,6 +110,15 @@ float mel_to_freq(float mel)
     return 700.0 * (expf(mel / 1127.0) - 1.0);
 }
 
+// static
+// float cubic_interp(const float x, const float* p)
+// {
+//     return    p[1] * ((x-p[2])*(x-p[4])*(x-p[6])) / ((p[0]-p[2])*(p[0]-p[4])*(p[0]-p[6]))
+//             + p[3] * ((x-p[0])*(x-p[4])*(x-p[6])) / ((p[2]-p[0])*(p[2]-p[4])*(p[2]-p[6]))
+//             + p[5] * ((x-p[0])*(x-p[2])*(x-p[6])) / ((p[4]-p[0])*(p[4]-p[2])*(p[4]-p[6]))
+//             + p[7] * ((x-p[0])*(x-p[2])*(x-p[4])) / ((p[6]-p[0])*(p[6]-p[2])*(p[6]-p[4]));
+// }
+
 static void
 update_window_title (GLFWwindow *window, struct vsp_state *state)
 {
@@ -281,23 +290,29 @@ int main()
         const float gain = state.gain_multiplier;
 
         for (int i = 0; i < NUM_POINTS; ++i) {
-            static const float DELTA_MEL = 1127.0 * logf((20000.0 + 700.0) / (20.0 + 700.0));
-            static const float MEL_MIN = 1127.0 * logf(1.0 + 20.0/700.0);
+            static const float DELTA_MEL = 1127.0 * logf((20000.0 + 700.0) / (20.0 + 700.0)),
+                               MEL_MIN = 1127.0 * logf(1.0 + 20.0/700.0);
 
-            const float mel = DELTA_MEL * (float)i / NUM_POINTS + MEL_MIN;
-            const float freq = mel_to_freq(mel);
+            #define index_to_mel(i) (DELTA_MEL * (float)(i) / NUM_POINTS + MEL_MIN)
 
-            float bin_index;
-            const float bin_alpha = modff(freq * BIN_WIDTH, &bin_index);
-            const float bin = smoothed_fft[(int)bin_index];
-            const int next_bin_index = bin_index + 1; // Addition, then cast to int.
-            const float next_bin = next_bin_index > BANDWIDTH ? 0 : smoothed_fft[next_bin_index];
+            const float fc = mel_to_freq(index_to_mel(i)),
+                        fnext = mel_to_freq(index_to_mel(i + 1));
 
-            // Linear interpolation; why? Because we're working with lines!
-            const float lerp = (1.0 - bin_alpha) * bin + bin_alpha * next_bin;
-            const float y = lerp * gain * sign;
+            // In the Mel-scale higher frequencies are more condensed; i.e. same increments
+            // in the Mel-scale translate to small increments for lower frequencies, and
+            // large increments for higher frequencies in the linear-scale.
+            //
+            // If we resort to normal indexing, would it crudely skip wide bands of frequencies.
+            // So instead, a more diplomatic approach is to take the average of bands.
+            const int lo_bin = fc * BIN_WIDTH,
+                      hi_bin = ceilf(fnext * BIN_WIDTH);
 
-            points[i + 1].y = y;
+            float band_avg = 0.0;
+            for (int i = lo_bin; i < hi_bin; ++i)
+                band_avg += smoothed_fft[i];
+            band_avg /= hi_bin - lo_bin;
+
+            points[i + 1].y = gain * sign * band_avg;
             sign *= -1.0;
         }
 
