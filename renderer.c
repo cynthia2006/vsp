@@ -19,9 +19,10 @@
 #include "renderer.h"
 
 bool
-pr_init (struct polygon_renderer* pr, GLfloat line_width)
+pr_init (struct polygon_renderer* pr)
 {
     pr->program = glCreateProgram();
+
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
     GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
 
@@ -61,18 +62,7 @@ pr_init (struct polygon_renderer* pr, GLfloat line_width)
                           (const void*)0);
     glEnableVertexAttribArray(0);
 
-    pr->line_width = line_width;
-
     return true;
-}
-
-static inline void
-pr_clear (struct polygon_renderer* pr)
-{
-    (void)pr; // Currently, not used.
-
-    glClearColor(1.0, 1.0, 0.0, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
 }
 
 void
@@ -80,19 +70,11 @@ pr_draw (struct polygon_renderer* pr, struct vertex* points, GLsizei num)
 {
     glUseProgram(pr->program);
     glBindVertexArray(pr->vao);
-    glBufferData(GL_ARRAY_BUFFER,
-                 num * sizeof(struct vertex),
-                 points,
-                 GL_STREAM_DRAW);
-    glLineWidth(pr->line_width);
-    pr_clear(pr);
+    // Assuimg the structure is packed; i.e. 1 struct = 2 floats
+    glBufferData(GL_ARRAY_BUFFER, num * sizeof(struct vertex), points, GL_STREAM_DRAW);
+    glClearColor(1.0, 1.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
     glDrawArrays(GL_LINE_STRIP, 0, num);
-}
-
-void
-pr_set_line_width (struct polygon_renderer* pr, float line_width)
-{
-    pr->line_width = line_width;
 }
 
 void
