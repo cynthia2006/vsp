@@ -1,6 +1,6 @@
 # vsp
 
-vsp is a lightweight OpenGL audio visualizer. A port of [rvsp](https://github.com/cynthia2006/rvsp), the functionality is an exact replica of the original, save for a few things. 
+vsp is a lightweight OpenGL audio visualizer, which captures your system audio and displays the spectrum. The yellow-on-black colour scheme is a part of its heritage. It's a port of [rvsp](https://github.com/cynthia2006/rvsp), but improved in many ways. 
 
 [CinematicVSP.webm](https://github.com/user-attachments/assets/c3e6a155-3f7c-4178-bced-53face6879ce)
 
@@ -26,74 +26,56 @@ The final artifact would be `vsp` in `builddir`—takes no options, runs out of 
 
 ## Controls
 
-- <kbd>↑</kbd> to increase, and <kbd>↓</kbd> to decrease gain.
-- <kbd>←</kbd> to decrease, and <kbd>→</kbd> to increase smoothing time constant (0 < τ < 1).
+- <kbd>↑</kbd> to increase and <kbd>↓</kbd> to decrease gain of the spectrum.
+- <kbd>←</kbd> to decrease and <kbd>→</kbd> to increase smoothing time constant (0 < τ < 1).
 
 
-### "Suckless" Approach
+### "Suckless" approach
 
-This app has no mechanism for dynamic configuration. If you want to tweak something, you can tweak it by *changing the constants* defined in `vsp.c`. It satirizes the cult-like philosophy Suckless.
-
-Suppose you want to broaden the frequency range, you open `vsp.c` and modify `MAX_FREQ`—for example to `12000`.
-
-```diff
--const float MAX_FREQ = 10000.0;
-+const float MAX_FREQ = 12000.0;
-```
-
-And then,
-
-```
-$ meson compile -C builddir
-```
+This app is as bare minimum as it could get, and the defaults are universally the best choice. However, if your needs are special you can of course adjust the options by editing the code itself (options in `vsp.c`). There is no mechanism for loading configuration files, as the code needed for that would alone outweigh the existing codebase. In the Linux community this is known as the "suckless" approach.
 
 
 ### Smoothing time constant
 
-Smoothing time constant (**τ**) is a parameter that controls how data is [smoothed exponentially](https://en.wikipedia.org/wiki/Exponential_smoothing) over time; a kind of lowpass filtering. In this context, it controls the responsiveness of the spectrum—higher the values, the smoother the animation. It defaults to `0.7`, which in my personal experience, provides the best balance of responsiveness and smoothness.
-
+Smoothing time constant (**τ**) is a parameter controlling [temporal smoothing of spectrum](https://en.wikipedia.org/wiki/Exponential_smoothing); higher the values the smoother the animation. The default is 0.8, which is quite eye-pleasing; lower values (typically around 0.6) are good for high-BPM music if you're into that.
 
 ## Spectrum
 
-The **spectrum is linear**, both on the frequency and the amplitude axis. The frequency range is limited between **50 to 10000 Hz**; chiefly considering visual aesthetics, because usually one generally won't be interested in the higher parts of the spectrum.
-
-To understand the theory that underpins the mechanics of this program, i.e. **STFT** (Short-Time Fourier Transform), read [this](https://brianmcfee.net/dstbook-site/content/ch09-stft/intro.html) article; and, for the choice of normalization, read [this](https://appliedacousticschalmers.github.io/scaling-of-the-dft/AES2020_eBrief/#31--scaling-of-dft-spectra-of-discrete-tones) (rather technical) article.
+A [Mel-scale](https://en.wikipedia.org/wiki/Mel_scale) spectrum (20-20000 Hz) is used to display lower frequencies in greater detail, and higher frequencies in coarse detail. Amplitude is in linear scale however, simply because it's visually appealing. You usually adjust the gain of the spectrum using the <kbd>↑</kbd> and <kbd>↓</kbd> keys as needed (e.g. the volume of music is too low).
 
 ## Why Rust to C?
 
-`vsp` is rewritten in C, an allegedly “unsafe” language. However, during development of `rvsp`, I was confronted with a strange a epiphany, that Rust programmers, often—if not always—take safety for granted. A safe interface, when it incorrectly acts with an unsafe interface, malfunctions, it becomes a painstaking job of identifying (mostly identifying) and fixing the site of error.
+`vsp` is rewritten in C—an allegedly ‘unsafe’ language. When I actively worked on `rvsp`, I had a strange a epiphany that Rust programmers often take safety for granted. A seemingly safe interface when it has a logical error it could even be harder to trace than undefined behaviour. And, if the safe interface is the mould of an unsafe interface, a logical error within the implementation of the safe code creates the illusion of safety, and thus the concept of fearlessness Rust boasts about is tested. Ofcourse, as a ‘safe’ language Rust places various barriers in form of ownership and borrow checkers, ensuring no incorrect safe code can compile; in the worst case, crash without inducing undefined behaviour (e.g. out of bounds indexing)—all of this you already know however. My issue here is with a certain class of Rust code: bindings.
 
-As a supposed “safe” language, Rust places various barriers, so as to ensure that no incorrect safe code can compile; or in the worst case, crash without inducing undefined behaviour. The apparent simplicity of C is quite decieving, because historically, it's lack of safety checks has resulted in a large number of CVEs related to memory safety issues (buffer overflows, race conditions, etc.) All of this you already know. However, my issue here is with a certain class of Rust code, or rather say, library crates—bindings.
+As it happens so often, that majority of libraries haven't yet been ‘rewritten to Rust’, thus the need for bindings (using FFI). Rust is particularly ugly with C interop. I call it ‘pathetic’. Bindings crates exist so that the average Rust user can overcome this ugliness. To me ‘unsafe Rust’ is the same as ‘unsafe sex’—two dangerous thrills of life. Often the documentation of safe interfaces is non-existent or poor, and sometimes the ‘safe’ interface malfunctions in a non-deterministic way. It then becomes a necessity to dive into the actual source code to understand what it is doing with the underlying C library to ascertain correct behaviour; this extra effort could just be put into directly using the ‘unsafe’ interface than understand the nook and corner of the ‘safe’ interface. This is also what is wrong with C++; instead of becoming a supposedly ‘better’ language than C, it brings it own deficiencies to become nothing but a cancerous disease.
 
-As it happens so often, most of the existing libraries haven't already been “rewritten to Rust”, and thus we require bindings to them using FFI. One of the very displeasing aspects of Rust is C interoperatibility; it can summarised as “pathetic” in my opinion, and to hide this “pathetic” detail, “safe” interfaces are often written on top of “unsafe” ones (the FFI), simply because “unsafe Rust” is like “unsafe sex”—both are very dangerous, and both suck. Sometimes, the documentation of safe interfaces is non-existent or is poor; and sometimes, the “safe” interface malfunctions in a non-deterministic way, so it becomes a necessity to dive into the actual source code, to understand what library calls it actually performs to ascertain correct behaviour—this extra effort could just be channelised into directly using the “unsafe” interface, rather than understand the “safe” interface. This is also what is wrong with C++. Instead of becoming a supposedly “better” language than C, it adds on top of C's defecits with its own, becoming nothing but a cancerous disease that everyone pretends to praise, but internally loathes.
-
-The reason I moved away from `rvsp` to create `vsp`, is mainly because of trashy `pipewire-rs`, and because of the complexities introduced by `winit` and `glutin` pair just to initialise a simple OpenGL context! My faint heart, which adores simplicity, was frightened by the monster I had created in the name of “safe” code. Another apparent benefit of moving from Rust to C was faster compilation times; it was important for me, because on my computer, and especially Raspberry Pis, it takes a significant amount of time to compile the code, as it first fetches the dependencies from **crates.io** them compiles them. This is another large minus point for Rust, as there's no stable ABI yet.
+Enough rambling, I guess. The reason for me to move away from `rvsp` to create `vsp` is chiefly because of the trashy `pipewire-rs` library, and because of the complexities introduced by `winit` and `glutin`—all to just initialise a simple OpenGL context. As a hobby project, I wasn't enjoying coding it; rather I was anxious to navigating through the needless complexities, sometimes staying late awake at night. Another benefit of moving away from Rust to C was instant compilation :)
 
 ### OpenGL to `glium`
 
-Originally, I had used `skia-rs` as the 2D drawing library. It was a heavy dependency, and took an excessively long-time to compile because it compiled the C++ code (language Skia is written in) as well; it was hard to set up as well, especially its GPU accelarated backend (OpenGL). The example code using `winit` and `glutin` (libraries whom I had no awareness of) made it worse, because I had to change those examples, so that they work with **SDL**. Eventually, I learnt basics of OpenGL, then subsequently replacing Skia with “unsafe” OpenGL calls (you could already imagine how “pathetic” graphics development would be in Rust). Fortunately, the code worked as expected.
+Originally, I had used `skia-rs` as the 2D drawing library. It was a heavy dependency taking an excessively long-time to compile, because it compiled Skia from source. I had to struggle setting up the Ganesh backend of Skia for OpenGL accelerated rendering. The example code using `winit` and `glutin` (libraries whom I had no awareness of then) made it worse, for I had to change those examples to work with **SDL**. Eventually I learnt basics of OpenGL, and replaced Skia with ‘unsafe’ OpenGL calls (imagine how ‘pathetic’ graphics development is in Rust). The code worked as expected, fortunately.
 
-Then, one day, I felt a wanton urge of replacing “unsafe” OpenGL calls with “safe” ones, thus I search around and approached `glium`. Unfortunately, the project had long been discontinued by its author, and was being maintained by the community; however, I still decided to try it out. I used **SDL**, but `glium` by default had integration with `winit` and `glutin`; the docs however stated, that any backend could be used, if it [implemented the required traits](https://docs.rs/glium/latest/glium/backend/index.html). It took me an embarrasingly long time, first understand how to interfaces are meant to interact with each other, requiring to study the existing implementation for `winit` and `glutin`; then understanding how to integrate with SDL. In the end, ended up with [this code](https://github.com/cynthia2006/rvsp/blob/3f0da4c7f8f5a314e9e5d892c22df2903bc3684b/src/sdl_backend.rs); and it worked.
+I grew paranoid over ‘unsafe’ OpenGL calls, and as a good Rust user, had wanted to replaced them with ‘safe’ ones. I stumbled upon `glium`. The project had long been discontinued by its author (Tomaka), and was under community maintenance. I still decided to try it out. I used **SDL** then, but `glium` only had seamless integration with `winit` and `glutin`. The documentation stated that any backend could be used only if it [implemented the required traits](https://docs.rs/glium/latest/glium/backend/index.html). It cost me an embarrasingly long time to figure out how the traits are meant to interact with each other, prompting me to study the code from `glium`, and then figure out how to integrate all that with SDL. I ended up with [this code](https://github.com/cynthia2006/rvsp/blob/3f0da4c7f8f5a314e9e5d892c22df2903bc3684b/src/sdl_backend.rs), and it worked.
 
-### `winit`/`glutin`
+### `winit` + `glutin`
 
-SDL's audio backend was inadequate for my needs from the start; it was merely kept for portability reasons. I had to manually, configure the capture source to be the monitor of system audio sink, instead of my microphone, through **pavucontrol**; then when **pavucontrol** broke for some reason, through **qpwgraph** (extremely unreliable). It was now time to sacrifice portability, and make it Linux only; mainly because Linux is my main workstation. SDL's audio backend was replaced with PipeWire.
+SDL's audio interface was inadequate for my needs from the start, and it was merely kept for portability across platforms. I manually had to route the system audio to the program through **pavucontrol**, otherwise it captured my from the microphone; when **pavucontrol** broke for some reason, through **qpwgraph** (extremely unreliable). I opted for PipeWire, sacrificing portability to systems other than Linux.
 
-I still used `glium`, so to ditch the SDL dependency entirely, I opted for the more compatible **winit** and **glutin** pair. The code as a result, become a bit complicated, but not as much.
+I still used `glium`; so to remove the SDL dependency entirely, I brought in **winit** and **glutin**. The code became moderately complicated, but still within grasp.
 
 ### `glium` to OpenGL
 
-Because `glium` was not actively developed anymore, and because its interface was a far cry from what is meant to abstract, OpenGL, I thought of ditching it. Had I known the sea of complexities I would find myself in, I would either leave it at that, or start the work on a C rewrite that point on words. It was a daunting task, because both `winit` and `glutin`  lack any tutorials to describe their intended usage. I had to rely on mostly guesswork and experience, and the only guiding example I could possibly find is [this](https://github.com/rust-windowing/glutin/blob/master/glutin_examples/src/lib.rs), which apparently is the minimum you require to draw an OpenGL triangle!
+Because `glium` was not actively developed anymore, and because it was too abstract, I thought of doing away with it. I wish, I had been aware of what I was signing up for. I would either leave it at that or rewrite it in C. It was quite exhausting as both `winit` and `glutin` sorely lack tutorials to describe their intended usage. I had to rely on mostly guesswork and experience, and the only guiding example I could possibly find is [this](https://github.com/rust-windowing/glutin/blob/master/glutin_examples/src/lib.rs), which apparently is the minimum you require to draw an OpenGL triangle!
 
 ### `pipewire-rs`
 
-The prime reason behind a C rewrite was the absolutely trash [pipewire-rs](https://gitlab.freedesktop.org/pipewire/pipewire-rs) library—largely unmaintained, and not on par with development of the [official C API](https://docs.pipewire.org/page_api.html) of PipeWire. The [support for **thread loops** is severely broken](https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/issues/17), causing program crashes. As a consequence, I was forced to either [iterate](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/loop_/struct.LoopRef.html#method.iterate) the main-loop through hooking it in the [`about_to_wait()`](https://docs.rs/winit/latest/winit/application/trait.ApplicationHandler.html#method.about_to_wait) callback; or, to iterate it when an event was available on the [event loop's file descriptor](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/loop_/struct.LoopRef.html#method.fd), as demonstrated [here](https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/src/examples/gmain.c?ref_type=heads#L65-67). Initially, I opted for the first option; but the main problem with that approach was that, frequency of iterations of `winit`'s event loop, never ought to match the frequency of iterations in PipeWire's event loop; in other words, winit's event-loop not running would stall PipeWire's event-loop, and forbid it from processing events recieved on its own file descriptor. This would be a suboptimal solution, so I tried to implement the second option, but unfortunately `winit`—as of now—doesn't expose a method to [add a file descriptor to be notified when events arrive on it](https://github.com/rust-windowing/winit/issues/3592), unlike glib's event-loop.
+The primary reason behind this C rewrite was the absolutely garbage [pipewire-rs](https://gitlab.freedesktop.org/pipewire/pipewire-rs) library—largely unmaintained, and not on par with development of the [official C API](https://docs.pipewire.org/page_api.html) of PipeWire. The [support for **thread loops** is severely broken](https://gitlab.freedesktop.org/pipewire/pipewire-rs/-/issues/17), which cause programs to unexpectedly crash. As a consequence, I was forced to either [iterate](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/loop_/struct.LoopRef.html#method.iterate) the mainloop through hooking it in the [`about_to_wait()`](https://docs.rs/winit/latest/winit/application/trait.ApplicationHandler.html#method.about_to_wait) callback, or to iterate it when an event was available on the [event loop's file descriptor](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/loop_/struct.LoopRef.html#method.fd) (as demonstrated [here](https://gitlab.freedesktop.org/pipewire/pipewire/-/blob/master/src/examples/gmain.c?ref_type=heads#L65-67)). Initially I went for the first option, but the main problem with that approach was that, frequency of iterations of `winit`'s event loop, never ought to match the frequency of iterations in PipeWire's event loop; in other words—winit's eventloop not running would stall PipeWire's eventloop, and blocking it from processing events received on its own fd (file descriptor): a suboptimal solution. Thus, I tried to adopt the second option, but unfortunately `winit` (as of now) doesn't expose a method to [add a fd to its watchlist and notify when events arrive on it](https://github.com/rust-windowing/winit/issues/3592).
 
-Thus, the consensus was to invert the paradigm. PipeWire [exposed such a method](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/loop_/struct.LoopRef.html#method.add_io), so I instead added the [file descriptor of winit's event loop](https://github.com/rust-windowing/winit/blob/519947463fe2c2e213c5cc8f217554d07301ef23/src/event_loop.rs#L331-L333) (strangely, not enlisted on **docs.rs**) to its watch list as shown [here](https://github.com/rust-windowing/winit/blob/519947463fe2c2e213c5cc8f217554d07301ef23/src/event_loop.rs#L331-L333).
+PipeWire however [had such a method](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/loop_/struct.LoopRef.html#method.add_io), thus I instead added the [fd of winit's event loop](https://github.com/rust-windowing/winit/blob/519947463fe2c2e213c5cc8f217554d07301ef23/src/event_loop.rs#L331-L333) (strangely, not enlisted on **docs.rs** of `winit`) to its watch list (as shown [here](https://github.com/rust-windowing/winit/blob/519947463fe2c2e213c5cc8f217554d07301ef23/src/event_loop.rs#L331-L333)).
 
-The issues don't just end here; when requested for single-channel audio ([here](https://github.com/cynthia2006/rvsp/blob/fb10b69fa57e7db77a228d6d550ed15105da1713/src/main.rs#L369-L376)) through `info.set_channels(1)`, it only links the left channel, ignoring the right entirely, as shown in this picture.
+The issues don't just end here! Requests for mono-audio ([here](https://github.com/cynthia2006/rvsp/blob/fb10b69fa57e7db77a228d6d550ed15105da1713/src/main.rs#L369-L376)) through `info.set_channels(1)` only links the left channel, ignoring the right entirely (as shown in this screenshot; qpwgraph).
 
 ![2025-05-06_15-55](https://github.com/user-attachments/assets/3354c5de-a14b-4c66-8e6c-38b8577514e9)
 
 
-Following the behaviour of the C API, it should downmix these channels, but since for a strange reason it doesn't, so [I have to implement it myself](https://github.com/cynthia2006/rvsp/blob/fb10b69fa57e7db77a228d6d550ed15105da1713/src/main.rs#L101-L111).
+The C API downmixes the channels appropriately, but `pipewire-rs` binding for a strange reason, doesn't; so [I had to implement it myself](https://github.com/cynthia2006/rvsp/blob/fb10b69fa57e7db77a228d6d550ed15105da1713/src/main.rs#L101-L111). And, this last issue was enough for me to drive away from development of **rvsp**.
