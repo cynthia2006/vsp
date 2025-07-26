@@ -31,7 +31,7 @@ struct polygon_renderer
     GLuint program;
 };
 
-bool
+int
 pr_init (struct polygon_renderer* pr);
 
 void

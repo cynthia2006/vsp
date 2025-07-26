@@ -18,7 +18,7 @@
 
 #include "renderer.h"
 
-bool
+int
 pr_init (struct polygon_renderer* pr)
 {
     pr->program = glCreateProgram();
@@ -62,7 +62,7 @@ pr_init (struct polygon_renderer* pr)
                           (const void*)0);
     glEnableVertexAttribArray(0);
 
-    return true;
+    return 0;
 }
 
 void
@@ -70,7 +70,7 @@ pr_draw (struct polygon_renderer* pr, struct vertex* points, GLsizei num)
 {
     glUseProgram(pr->program);
     glBindVertexArray(pr->vao);
-    // Assuimg the structure is packed; i.e. 1 struct = 2 floats
+    // Assuming the structure is packed; i.e. 1 struct = 2 floats
     glBufferData(GL_ARRAY_BUFFER, num * sizeof(struct vertex), points, GL_STREAM_DRAW);
     glClearColor(1.0, 1.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
