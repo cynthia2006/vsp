@@ -41,7 +41,7 @@ struct pipewire_backend
     struct pwb_state_carrier state;
 };
 
-bool
+int
 pipewire_backend_init (struct pipewire_backend *backend,
                        struct pw_loop* loop,
                        const char* stream_name,

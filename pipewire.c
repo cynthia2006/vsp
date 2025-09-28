@@ -43,7 +43,7 @@ fill_audio_buffer(void *_userdata)
 }
 
 
-bool
+int
 pipewire_backend_init (struct pipewire_backend *backend,
                        struct pw_loop* loop,
                        const char* stream_name,
@@ -75,7 +75,7 @@ pipewire_backend_init (struct pipewire_backend *backend,
 
     backend->state.ring_buffer.buffer = calloc (window_size, sizeof(float));
     if (!backend->state.ring_buffer.buffer)
-        goto cleanup;
+        goto error;
 
     backend->state.sample_rate = sample_rate;
     backend->state.stream = pw_stream_new_simple (loop,
@@ -84,17 +84,17 @@ pipewire_backend_init (struct pipewire_backend *backend,
                                                  &backend->stream_events,
                                                  &backend->state);
     if (!backend->state.stream)
-        goto cleanup;
+        goto error;
 
-    return true;
-cleanup:
+    return 0;
+error:
     if (backend->state.stream)
         pw_stream_destroy(backend->state.stream);
 
     if (props)
         pw_properties_free (props);
 
-    return false;
+    return -1;
 }
 
 // 0 for success; <0 for failure.
@@ -115,11 +115,11 @@ pipewire_backend_connect (struct pipewire_backend *backend)
                                            ));
 
     return pw_stream_connect(backend->state.stream,
-                            PW_DIRECTION_INPUT,
-                            PW_ID_ANY,
-                            PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
-                            params,
-                            1);
+                             PW_DIRECTION_INPUT,
+                             PW_ID_ANY,
+                             PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
+                             params,
+                             1);
 }
 
 void
@@ -150,5 +150,5 @@ void
 pipewire_backend_deinit (struct pipewire_backend *backend)
 {
     pw_stream_destroy (backend->state.stream);
-    free(backend->state.ring_buffer.buffer);
+    free (backend->state.ring_buffer.buffer);
 }
