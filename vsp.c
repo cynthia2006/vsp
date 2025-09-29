@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <complex.h>
 
 #include "renderer.h"
 
@@ -48,7 +49,7 @@ const float MARGIN_VW = 0.01;
 // NOTE This would scale automatically on window resize; see resize_callback()
 const float LINE_WIDTH = 1.75;
 // Initial gain of spectrum (in decibels).
-const float INIT_GAIN = 13.0;
+const float INIT_GAIN = 16.0;
 // Initial exponential smoothing factor (ranging from 0 to 1).
 //
 // WARNING Setting this below zero or above one is undefined behaviour.
@@ -148,7 +149,7 @@ resize_callback(GLFWwindow* window, int width, int height)
 
 int main()
 {
-    GLFWwindow *window;
+    GLFWwindow *window = NULL;
 
     struct polygon_renderer pr;
     struct pipewire_backend pwb;
@@ -251,7 +252,7 @@ int main()
 
         const float gain = db_rms_to_power(state.gain);
 
-        static const float FFT_SCALE = 4.0 / WINDOW_SIZE;
+        static const float FFT_SCALE = 2.0 / WINDOW_SIZE;
         static const float DELTA_MEL = 3785.184764; // 1127 * ln((20000.0 + 700.0) / (20.0 + 700.0))
         static const float MEL_MIN = 31.748578; // 1127.0 * ln(1.0 + 20.0/700.0)
         static const float BIN_WIDTH = (float)WINDOW_SIZE / SAMPLERATE;
@@ -261,9 +262,24 @@ int main()
         float sign = 1.0;
         for (int i = 0; i < NUM_POINTS; ++i)
         {
-            const int bi = mel_to_freq(index_to_mel(i)) * BIN_WIDTH;
-            const kiss_fft_cpx bin = freq_bins[bi];
-            const float mag = FFT_SCALE * hypotf(bin.r, bin.i);
+            const float fc = mel_to_freq(index_to_mel(i)),
+                        fnext = mel_to_freq(index_to_mel(i+1));
+
+            const int bi_lo = fc * BIN_WIDTH, // floor(fc * BIN_WIDTH), since always positive.
+                      bi_hi = ceilf(fnext * BIN_WIDTH),
+                      bdelta = bi_hi - bi_lo;
+
+            float mag = 0.0;
+            complex float bin;
+
+            for (int bi = 0; bi < bdelta; ++bi)
+            {
+                bin = *(complex float*)&freq_bins[bi_lo + bi];
+
+                // Find the most dominant tone, band averaging is not desired for we're not
+                // computing the power spectra.
+                mag = fmaxf(mag, FFT_SCALE * cabsf(bin));
+            }
 
             // Exponential smoothing to make animation smoother.
             sm_freqs[i] = sm_freqs[i] * state.tau + (1.0 - state.tau) * mag;
