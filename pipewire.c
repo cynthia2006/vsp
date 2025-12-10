@@ -19,11 +19,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #include <spa/pod/builder.h>
 #include <spa/param/audio/format-utils.h>
 
 #include "pipewire.h"
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static void
 pipewire_backend_store (struct pwb_sample_buffer* rb, float* samples, size_t len);
@@ -123,27 +126,28 @@ pipewire_backend_connect (struct pipewire_backend *backend)
 }
 
 void
-pipewire_backend_capture(struct pipewire_backend *backend, float *sample_buf)
+pipewire_backend_capture(struct pipewire_backend *backend, float *samples)
 {
     struct pwb_sample_buffer *rb = &backend->state.ring_buffer;
-    size_t index = rb->cursor;
 
-    for (size_t i = 0; i < rb->capacity; ++i)
-    {
-        sample_buf[i] = rb->buffer[index];
-        index = (index + 1) % rb->capacity;
-    }
+    size_t temp = rb->capacity - rb->cursor;
+
+    memcpy(samples, &rb->buffer[rb->cursor], temp * sizeof(float));
+    memcpy(&samples[temp], rb->buffer, rb->cursor * sizeof(float));
 }
 
-// Put doesn't care if the data was actually read, thus allowing overwrites.
 static void
 pipewire_backend_store (struct pwb_sample_buffer* rb, float* samples, size_t len)
 {
-    for(size_t i = 0; i < len; ++i)
-    {
-        rb->buffer[rb->cursor] = samples[i];
-        rb->cursor = (rb->cursor + 1) % rb->capacity;
-    }
+    // Assuming our circular buffer is larger than chunks of samples it recieves.
+    assert(len <= rb->capacity);
+
+    size_t temp = MIN(rb->capacity - rb->cursor, len);
+
+    memcpy(&rb->buffer[rb->cursor], samples, temp * sizeof(float));
+    memcpy(rb->buffer, &samples[temp], (len - temp) * sizeof(float));
+
+    rb->cursor = (rb->cursor + len) % rb->capacity;
 }
 
 void

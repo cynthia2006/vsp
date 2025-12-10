@@ -72,6 +72,11 @@ struct vsp_state
     float tau, gain;
 };
 
+struct bin_range
+{
+    float begin, end;
+};
+
 // Genererates a von Hann window of length N.
 static void
 gen_hann_window(int N, float *win)
@@ -162,6 +167,7 @@ int main()
     float hann_win[WINDOW_SIZE];
     kiss_fft_cpx freq_bins[FFT_SIZE];
 
+    struct bin_range ranges[NUM_POINTS];
     struct vertex points[NUM_POINTS + 1];
     // Exponential smoothing is applied on freq_bins.
     float sm_freqs[NUM_POINTS];
@@ -208,19 +214,30 @@ int main()
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, resize_callback);
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    glfwMakeContextCurrent(window); // Set the OpenGL context.
+    glfwSwapInterval(1); // Enable VSync.
     gladLoadGL(glfwGetProcAddress);
 
     // Generate x-coords; do it here because if it were to be done in the hot-loop,
     // it would be a waste of CPU cycles.
-    static const float X_STEP = 2.0 * (1.0 - MARGIN_VW) / NUM_POINTS;
+    const float X_STEP = 2.0 * (1.0 - MARGIN_VW) / NUM_POINTS;
     float x = -1.0 + MARGIN_VW;
 
     for (int i = 0; i < NUM_POINTS; ++i)
     {
         points[i].x = x;
         x += X_STEP;
+
+        const float DELTA_MEL = 3785.184764; // 1127 * ln((20000.0 + 700.0) / (20.0 + 700.0))
+        const float MEL_MIN = 31.748578; // 1127.0 * ln(1.0 + 20.0/700.0)
+        const float BIN_WIDTH = (float)WINDOW_SIZE / SAMPLERATE;
+
+        #define index_to_mel(i) (DELTA_MEL * (float)(i) / NUM_POINTS + MEL_MIN)
+
+        ranges[i] = (struct bin_range) {
+            .begin = mel_to_freq(index_to_mel(i)) * BIN_WIDTH,
+            .end = mel_to_freq(index_to_mel(i+1)) * BIN_WIDTH + 1.0
+        };
     }
 
     pr_init(&pr);
@@ -253,35 +270,26 @@ int main()
         const float gain = db_rms_to_power(state.gain);
 
         static const float FFT_SCALE = 2.0 / WINDOW_SIZE;
-        static const float DELTA_MEL = 3785.184764; // 1127 * ln((20000.0 + 700.0) / (20.0 + 700.0))
-        static const float MEL_MIN = 31.748578; // 1127.0 * ln(1.0 + 20.0/700.0)
-        static const float BIN_WIDTH = (float)WINDOW_SIZE / SAMPLERATE;
-
-        #define index_to_mel(i) (DELTA_MEL * (float)(i) / NUM_POINTS + MEL_MIN)
 
         float sign = 1.0;
         for (int i = 0; i < NUM_POINTS; ++i)
         {
-            const float fc = mel_to_freq(index_to_mel(i)),
-                        fnext = mel_to_freq(index_to_mel(i+1));
-
-            const int bi_lo = fc * BIN_WIDTH, // floor(fc * BIN_WIDTH), since always positive.
-                      bi_hi = ceilf(fnext * BIN_WIDTH),
-                      bdelta = bi_hi - bi_lo;
+            const int bbegin = ranges[i].begin;
+            const int bdelta = ranges[i].end - ranges[i].begin;
 
             float mag = 0.0;
             complex float bin;
 
             for (int bi = 0; bi < bdelta; ++bi)
             {
-                bin = *(complex float*)&freq_bins[bi_lo + bi];
+                bin = *(complex float*)&freq_bins[bbegin + bi];
 
-                // Find the most dominant tone, band averaging is not desired for we're not
-                // computing the power spectra.
+                // Find the most dominant tone; band averaging is not desired,
+                // that would be computing power spectra, and not tone spectra.
                 mag = fmaxf(mag, FFT_SCALE * cabsf(bin));
             }
 
-            // Exponential smoothing to make animation smoother.
+            // Exponential time-smoothing to make animation smoother.
             sm_freqs[i] = sm_freqs[i] * state.tau + (1.0 - state.tau) * mag;
 
             points[i + 1].y = gain * sign * sm_freqs[i];
