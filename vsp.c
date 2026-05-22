@@ -49,11 +49,11 @@ const float MARGIN_VW = 0.01;
 // NOTE This would scale automatically on window resize; see resize_callback()
 const float LINE_WIDTH = 1.75;
 // Initial gain of spectrum (in decibels).
-const float INIT_GAIN = 16.0;
+const float INIT_GAIN = 20.0;
 // Initial exponential smoothing factor (ranging from 0 to 1).
 //
 // WARNING Setting this below zero or above one is undefined behaviour.
-const float INIT_SMOOTHING_FACTOR = 0.8;
+const float INIT_SMOOTHING_FACTOR = 0.7;
 
 /**
  * WARNING The following options are intended for advanced users; its best not to fiddle with
@@ -186,7 +186,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_SAMPLES, MSAA_HINT);
 
-    loop = pw_thread_loop_new("pw-rvsp", NULL);
+    loop = pw_thread_loop_new("pw-vsp", NULL);
     pw_thread_loop_lock(loop);
     pw_thread_loop_start(loop);
 
@@ -271,7 +271,6 @@ int main()
 
         static const float FFT_SCALE = 2.0 / WINDOW_SIZE;
 
-        float sign = 1.0;
         for (int i = 0; i < NUM_POINTS; ++i)
         {
             const int bbegin = ranges[i].begin;
@@ -292,7 +291,16 @@ int main()
             // Exponential time-smoothing to make animation smoother.
             sm_freqs[i] = sm_freqs[i] * state.tau + (1.0 - state.tau) * mag;
 
-            points[i + 1].y = gain * sign * sm_freqs[i];
+            // points[i + 1].y = gain * sign * sm_freqs[i];
+        }
+
+        float sign = 1.0;
+
+        // Smoothing operation
+        for(int i = 1; i < NUM_POINTS-1; ++i)
+        {
+            float pv = sm_freqs[i-1] * 0.225 + sm_freqs[i] * 0.56 + sm_freqs[i+1] * 0.225;
+            points[i].y = sign * gain * pv;
 
             // Flipping sign creates the characteristic saw pattern.
             sign = -sign;
